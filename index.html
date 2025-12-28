@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>اختيار جزء من دائرة</title>
+<style>
+  body {
+    background: #f4f6f8;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin-top: 30px;
+  }
+  canvas {
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    cursor: pointer;
+  }
+  #controls {
+    margin-top: 15px;
+  }
+  button {
+    background: #0077b6;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover {
+    background: #023e8a;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas" width="400" height="400"></canvas>
+<div id="controls">
+  <p id="output"></p>
+  <button id="toggleDir">🔄 تبديل الاتجاه</button>
+</div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const centerX = canvas.width / 2;
+const centerY = canvas.height / 2;
+const radius = 150;
+
+let startAngle = 0;
+let endAngle = Math.PI / 2;
+let draggingHandle = null;
+let clockwise = true;
+
+// 📌 الزوايا المشهورة بالراديان
+const snapAngles = [
+  0,
+  Math.PI / 6,   // 30°
+  Math.PI / 4,   // 45°
+  Math.PI / 3,   // 60°
+  Math.PI / 2,   // 90°
+  (2 * Math.PI) / 3, // 120°
+  (3 * Math.PI) / 4, // 135°
+  (5 * Math.PI) / 6, // 150°
+  Math.PI,           // 180°
+  (7 * Math.PI) / 6, // 210°
+  (5 * Math.PI) / 4, // 225°
+  (4 * Math.PI) / 3, // 240°
+  (3 * Math.PI) / 2, // 270°
+  (5 * Math.PI) / 3, // 300°
+  (7 * Math.PI) / 4, // 315°
+  (11 * Math.PI) / 6 // 330°
+];
+
+const snapThreshold = (5 * Math.PI) / 180; // 5 درجات بالراديان
+
+// 🎯 تحويل زاوية إلى إحداثيات
+function angleToPos(angle) {
+  return {
+    x: centerX + Math.cos(angle) * radius,
+    y: centerY + Math.sin(angle) * radius
+  };
+}
+
+// 🎯 رسم
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // الدائرة الكاملة
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "#222";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // خطوط الزوايا المشهورة
+  ctx.font = "14px Arial";
+  ctx.fillStyle = "#555";
+  snapAngles.forEach(a => {
+    const pos = angleToPos(a);
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = "#ddd";
+    ctx.stroke();
+    ctx.fillText(a.toFixed(2), pos.x + 5, pos.y - 5);
+  });
+
+  // الجزء المحدد
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, startAngle, endAngle, !clockwise);
+  ctx.lineTo(centerX, centerY);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(0, 0, 139, 0.5)";
+  ctx.fill();
+
+  // النقطتين
+  [startAngle, endAngle].forEach((angle, i) => {
+    const pos = angleToPos(angle);
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? "#e63946" : "#457b9d";
+    ctx.fill();
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "black";
+    ctx.font = "12px Arial";
+    ctx.fillText(angle.toFixed(2), pos.x + 15, pos.y);
+  });
+
+  // النص
+  document.getElementById("output").textContent =
+    `البداية: ${startAngle.toFixed(2)} rad | النهاية: ${endAngle.toFixed(2)} rad | الاتجاه: ${clockwise ? "مع" : "عكس"} عقارب الساعة`;
+}
+
+// 🎯 حساب زاوية الماوس
+function getMouseAngle(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX ?? e.touches[0].clientX) - rect.left;
+  const y = (e.clientY ?? e.touches[0].clientY) - rect.top;
+  let angle = Math.atan2(y - centerY, x - centerX);
+  return angle >= 0 ? angle : (2 * Math.PI + angle);
+}
+
+// 📌 تطبيق الـ Snap
+function snapToFamous(angle) {
+  for (let a of snapAngles) {
+    if (Math.abs(a - angle) < snapThreshold) {
+      return a;
+    }
+  }
+  return angle;
+}
+
+// 🎯 بدء السحب
+function startDrag(e) {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX ?? e.touches[0].clientX) - rect.left;
+  const y = (e.clientY ?? e.touches[0].clientY) - rect.top;
+
+  [startAngle, endAngle].forEach((angle, i) => {
+    const pos = angleToPos(angle);
+    if (Math.hypot(x - pos.x, y - pos.y) < 15) {
+      draggingHandle = i;
+    }
+  });
+}
+
+// 🎯 السحب
+function moveDrag(e) {
+  if (draggingHandle !== null) {
+    e.preventDefault();
+    let angle = getMouseAngle(e);
+    angle = snapToFamous(angle); // 🆕 سناب
+    if (draggingHandle === 0) startAngle = angle;
+    else endAngle = angle;
+    draw();
+  }
+}
+
+// 🎯 إنهاء السحب
+function endDrag() {
+  draggingHandle = null;
+}
+
+// الأحداث
+canvas.addEventListener("mousedown", startDrag);
+canvas.addEventListener("mousemove", moveDrag);
+canvas.addEventListener("mouseup", endDrag);
+
+canvas.addEventListener("touchstart", startDrag, { passive: false });
+canvas.addEventListener("touchmove", moveDrag, { passive: false });
+canvas.addEventListener("touchend", endDrag);
+
+document.getElementById("toggleDir").addEventListener("click", () => {
+  clockwise = !clockwise;
+  draw();
+});
+
+draw();
+</script>
+
+</body>
+</html>
+
